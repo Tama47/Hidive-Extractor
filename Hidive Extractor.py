@@ -10,20 +10,22 @@ url = input("Enter Episode URL or Show URL: ")
 res = requests.get(url)
 
 # Create a BeautifulSoup object to parse the HTML content
-soup = BeautifulSoup(res.content, 'html.parser')
+soup = BeautifulSoup(res.content, "html.parser")
 
 # Extract show name
-title_details = soup.find('a', {'id': 'TitleDetails'})
+title_details = soup.find("a", {"id": "TitleDetails"})
 if title_details:
     show_name = title_details.text.strip()
 else:
-    show_name = soup.find('div', {'class': 'text-container'}).find('h1').text.strip()
+    show_name = soup.find("div", {"class": "text-container"}).find("h1").text.strip()
 
 # Extract episode number and name
-stream_title_description = soup.find('div', {'id': 'StreamTitleDescription'})
+stream_title_description = soup.find("div", {"id": "StreamTitleDescription"})
 if stream_title_description:
-    episode_number = stream_title_description.find_all('h2')[0].text.split('|')[0].strip()
-    episode_name = stream_title_description.find_all('h2')[1].text.strip()
+    episode_number = (
+        stream_title_description.find_all("h2")[0].text.split("|")[0].strip()
+    )
+    episode_name = stream_title_description.find_all("h2")[1].text.strip()
 
     # Remove "Season X" from episode info
     episode_number = episode_number.replace("Season 1 ", "")
@@ -45,47 +47,65 @@ if stream_title_description:
 
     # Print formatted output and save the image
     filename = f"{show_name} {episode_number} - {episode_name}.jpeg"
-    path = os.path.join(os.path.expanduser('~'), 'Downloads', filename)
+    path = os.path.join(os.path.expanduser("~"), "Downloads", filename)
     img_data = requests.get(img_url).content
-    with open(path, 'wb') as handler:
+    with open(path, "wb") as handler:
         handler.write(img_data)
         print(f"Image saved as {filename} in {os.path.dirname(path)}")
 else:
-    # Find link to show stream
-    stream_links = soup.find_all('a', href=re.compile('/stream/'))
+    processed_links = set()  # to store already processed links
+
+    url_pattern = f'stream/{url.split(".com/tv/")[1].split("/")[0]}/.*'
+    stream_links = soup.find_all("a", href=re.compile(url_pattern))
+
     for link in stream_links:
-        # Loop through all episodes and download images
-        episode_url = "https://www.hidive.com" + link['href']
-        episode_res = requests.get(episode_url)
-        episode_soup = BeautifulSoup(episode_res.content, 'html.parser')
+        href = link["href"]
+        if href not in processed_links:
+            processed_links.add(href)
+            print(href)
 
-        # Extract episode number and name
-        episode_title_description = episode_soup.find('div', {'id': 'StreamTitleDescription'})
-        episode_number = episode_title_description.find_all('h2')[0].text.split('|')[0].strip()
-        episode_name = episode_title_description.find_all('h2')[1].text.strip()
+            # Find link to show stream
+            episode_url = "https://www.hidive.com" + href
+            episode_res = requests.get(episode_url)
+            episode_soup = BeautifulSoup(episode_res.content, "html.parser")
 
-        # Remove "Season X" from episode info
-        episode_number = episode_number.replace("Season 1 ", "")
-        episode_number = episode_number.replace("Season 2 ", "")
-        episode_number = episode_number.replace("Season 3 ", "")
+            # Extract episode images
+            episode_images = episode_soup.find_all("img", {"class": "slide-item-image"})
+            for image in episode_images:
+                image_url = image["src"]
+                print(image_url)
 
-        # Remove everything before ": " in episode name
-        if ": " in episode_name:
-            episode_name = episode_name.split(": ")[1]
+            # Extract episode number and name
+            episode_title_description = episode_soup.find(
+                "div", {"id": "StreamTitleDescription"}
+            )
+            episode_number = (
+                episode_title_description.find_all("h2")[0].text.split("|")[0].strip()
+            )
+            episode_name = episode_title_description.find_all("h2")[1].text.strip()
 
-        # Replace "/" with "⧸"
-        episode_name = episode_name.replace("/", "⧸")
+            # Remove "Season X" from episode info
+            episode_number = episode_number.replace("Season 1 ", "")
+            episode_number = episode_number.replace("Season 2 ", "")
+            episode_number = episode_number.replace("Season 3 ", "")
 
-        # Find the image with alt attribute that matches the episode number
-        img_tag = episode_soup.find("img", alt=re.compile(episode_number))
+            # Remove everything before ": " in episode name
+            if ": " in episode_name:
+                episode_name = episode_name.split(": ")[1]
 
-        # Extract image URL
-        img_url = "https:" + img_tag["src"]
+            # Replace "/" with "⧸"
+            episode_name = episode_name.replace("/", "⧸")
 
-        # Print formatted output and save the image
-        filename = f"{show_name} {episode_number} - {episode_name}.jpeg"
-        path = os.path.join(os.path.expanduser('~'), 'Downloads', filename)
-        img_data = requests.get(img_url).content
-        with open(path, 'wb') as handler:
-            handler.write(img_data)
-            print(f"Image saved as {filename} in {os.path.dirname(path)}")
+            # Find the image with alt attribute that matches the episode number
+            img_tag = episode_soup.find("img", alt=re.compile(episode_number))
+
+            # Extract image URL
+            img_url = "https:" + img_tag["src"]
+
+            # Print formatted output and save the image
+            filename = f"{show_name} {episode_number} - {episode_name}.jpeg"
+            path = os.path.join(os.path.expanduser("~"), "Downloads", filename)
+            img_data = requests.get(img_url).content
+            with open(path, "wb") as handler:
+                handler.write(img_data)
+                print(f"Image saved as {filename} in {os.path.dirname(path)}")
